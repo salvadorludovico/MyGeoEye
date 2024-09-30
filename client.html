@@ -28,7 +28,9 @@
 
   <script>
     const socket = new WebSocket('ws://localhost:8080');
+    const CHUNK_SIZE = 1024 * 8; // Tamanho de cada chunk (8KB)
     let images = [];
+    let receivedChunks = [];
 
     socket.addEventListener('open', function (event) {
       console.log('Conectado ao WebSocket');
@@ -40,13 +42,21 @@
       if (response.status === 'success' && response.images) {
         images = response.images;
         displayImages(images);
-      } else if (response.status === 'download' && response.data) {
-        const link = document.createElement('a');
-        link.href = response.data;
-        link.download = response.filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+      } else if (response.status === 'download_chunk') {
+        // Reagrupar os chunks recebidos
+        receivedChunks[response.chunkIndex] = response.chunk;
+
+        // Checar se todos os chunks foram recebidos
+        if (receivedChunks.length === response.totalChunks) {
+          const base64Image = receivedChunks.join('');
+          const link = document.createElement('a');
+          link.href = 'data:image/jpeg;base64,' + base64Image;
+          link.download = response.filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          receivedChunks = []; // Limpar os chunks após a reconstrução
+        }
       } else {
         console.log('Mensagem do servidor:', response.message);
       }
@@ -111,13 +121,20 @@
         const reader = new FileReader();
         reader.onload = function () {
           const base64Data = reader.result.split(',')[1];
-          const message = JSON.stringify({
-            type: 'upload',
-            filename: file.name,
-            data: base64Data
-          });
-          socket.send(message);
-          console.log('Imagem enviada:', file.name);
+          const totalChunks = Math.ceil(base64Data.length / CHUNK_SIZE);
+
+          for (let i = 0; i < totalChunks; i++) {
+            const chunk = base64Data.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+            const message = JSON.stringify({
+              type: 'upload_chunk',
+              filename: file.name,
+              chunk: chunk,
+              chunkIndex: i,
+              totalChunks: totalChunks,
+            });
+            socket.send(message);
+          }
+          console.log('Imagem enviada em chunks:', file.name);
         };
         reader.readAsDataURL(file);
       } else {
