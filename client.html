@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload, Listagem e Pesquisa de Imagens via WebSocket</title>
+</head>
+
+<body>
+  <h1>Upload, Listagem e Pesquisa de Imagens</h1>
+
+  <input type="file" id="fileInput">
+  <br><br>
+
+  <button id="uploadButton">Enviar Imagem</button>
+  <br><br>
+
+  <button id="listImagesButton">Listar Imagens</button>
+  <br><br>
+
+  <label for="searchInput">Pesquisar Imagens:</label>
+  <input type="text" id="searchInput" placeholder="Digite o nome da imagem...">
+  <br><br>
+
+  <h3>Imagens no Servidor:</h3>
+  <div id="imagesList"></div>
+
+  <script>
+    const socket = new WebSocket('ws://localhost:8080');
+    let images = [];
+
+    socket.addEventListener('open', function (event) {
+      console.log('Conectado ao WebSocket');
+    });
+
+    socket.addEventListener('message', function (event) {
+      const response = JSON.parse(event.data);
+
+      if (response.status === 'success' && response.images) {
+        images = response.images;
+        displayImages(images);
+      } else {
+        console.log('Mensagem do servidor:', response.message);
+      }
+    });
+
+    function displayImages(imageList) {
+      const imagesListDiv = document.getElementById('imagesList');
+      imagesListDiv.innerHTML = '';
+
+      if (imageList.length > 0) {
+        imageList.forEach(imageName => {
+          const imageElement = document.createElement('p');
+          imageElement.textContent = imageName;
+
+          const deleteButton = document.createElement('button');
+          deleteButton.textContent = 'x';
+          deleteButton.style.color = 'red';
+          deleteButton.style.marginLeft = '10px';
+          deleteButton.onclick = function () {
+            deleteImage(imageName);
+          };
+
+          imageElement.appendChild(deleteButton);
+          imagesListDiv.appendChild(imageElement);
+        });
+      } else {
+        imagesListDiv.innerHTML = '<p>Nenhuma imagem encontrada.</p>';
+      }
+    }
+
+    function deleteImage(imageName) {
+      const message = JSON.stringify({
+        type: 'delete',
+        filename: imageName
+      });
+      socket.send(message);
+      console.log('Solicitando exclusão da imagem:', imageName);
+    }
+
+    document.getElementById('uploadButton').addEventListener('click', function () {
+      const fileInput = document.getElementById('fileInput');
+      const file = fileInput.files[0];
+
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function () {
+          const base64Data = reader.result.split(',')[1];
+          const message = JSON.stringify({
+            type: 'upload',
+            filename: file.name,
+            data: base64Data
+          });
+          socket.send(message);
+          console.log('Imagem enviada:', file.name);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        alert('Por favor, selecione um arquivo de imagem.');
+      }
+    });
+
+    document.getElementById('listImagesButton').addEventListener('click', function () {
+      const message = JSON.stringify({ type: 'list' });
+      socket.send(message);
+      console.log('Solicitando listagem de imagens...');
+    });
+
+    document.getElementById('searchInput').addEventListener('input', function () {
+      const searchTerm = this.value.toLowerCase();
+      const filteredImages = images.filter(imageName => imageName.toLowerCase().includes(searchTerm));
+      displayImages(filteredImages);
+    });
+
+    socket.addEventListener('close', function (event) {
+      console.log('Conexão com o servidor fechada');
+    });
+
+    socket.addEventListener('error', function (error) {
+      console.error('Erro no WebSocket:', error);
+    });
+  </script>
+</body>
+
+</html>
