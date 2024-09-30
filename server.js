@@ -80,6 +80,30 @@ wss.on('connection', function connection(ws) {
           );
         }
       });
+    } else if (parsedMessage.type === 'download') {
+      const { filename } = parsedMessage;
+      const filePath = path.join(IMAGES_DIR, filename);
+
+      fs.readFile(filePath, (err, data) => {
+        if (err) {
+          console.error('Erro ao ler a imagem:', err);
+          ws.send(
+            JSON.stringify({
+              status: 'error',
+              message: 'Erro ao ler a imagem',
+            }),
+          );
+        } else {
+          const base64Data = data.toString('base64');
+          ws.send(
+            JSON.stringify({
+              status: 'download',
+              filename: filename,
+              data: `data:image/jpeg;base64,${base64Data}`,
+            }),
+          );
+        }
+      });
     }
   });
 });

@@ -40,6 +40,13 @@
       if (response.status === 'success' && response.images) {
         images = response.images;
         displayImages(images);
+      } else if (response.status === 'download' && response.data) {
+        const link = document.createElement('a');
+        link.href = response.data;
+        link.download = response.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       } else {
         console.log('Mensagem do servidor:', response.message);
       }
@@ -62,7 +69,15 @@
             deleteImage(imageName);
           };
 
+          const downloadButton = document.createElement('button');
+          downloadButton.textContent = 'Baixar';
+          downloadButton.style.marginLeft = '10px';
+          downloadButton.onclick = function () {
+            downloadImage(imageName);
+          };
+
           imageElement.appendChild(deleteButton);
+          imageElement.appendChild(downloadButton);
           imagesListDiv.appendChild(imageElement);
         });
       } else {
@@ -77,6 +92,15 @@
       });
       socket.send(message);
       console.log('Solicitando exclusão da imagem:', imageName);
+    }
+
+    function downloadImage(imageName) {
+      const message = JSON.stringify({
+        type: 'download',
+        filename: imageName
+      });
+      socket.send(message);
+      console.log('Solicitando download da imagem:', imageName);
     }
 
     document.getElementById('uploadButton').addEventListener('click', function () {
